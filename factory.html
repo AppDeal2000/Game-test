@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Factory Line Balancer</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #111827; color: #e5e7eb; font-family: 'Courier New', monospace; min-height: 100vh; overflow-x: hidden; }
+
+/* ── START SCREEN ── */
+#start-screen {
+  position: fixed; inset: 0; background: #111827;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 100; gap: 24px;
+}
+#start-screen h1 { font-size: 3rem; color: #f59e0b; text-shadow: 0 0 20px #f59e0b88; letter-spacing: 4px; }
+#start-screen .subtitle { color: #9ca3af; font-size: 1rem; letter-spacing: 2px; }
+.instructions {
+  background: #1f2937; border: 1px solid #374151; border-radius: 12px;
+  padding: 28px 36px; max-width: 620px; line-height: 1.9;
+}
+.instructions h2 { color: #f59e0b; margin-bottom: 14px; font-size: 1.1rem; letter-spacing: 2px; }
+.instructions ul { padding-left: 20px; color: #d1d5db; }
+.instructions li { margin-bottom: 6px; }
+.instructions .highlight { color: #34d399; font-weight: bold; }
+.instructions .warn { color: #f87171; font-weight: bold; }
+#start-btn {
+  background: #f59e0b; color: #111827; border: none; padding: 16px 48px;
+  font-size: 1.2rem; font-family: 'Courier New', monospace; font-weight: bold;
+  letter-spacing: 3px; cursor: pointer; border-radius: 8px;
+  transition: all 0.2s; text-transform: uppercase;
+}
+#start-btn:hover { background: #fbbf24; transform: scale(1.05); box-shadow: 0 0 20px #f59e0b88; }
+
+/* ── GAME SCREEN ── */
+#game-screen { display: none; padding: 16px; }
+
+/* HUD */
+#hud {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #1f2937; border: 1px solid #374151; border-radius: 10px;
+  padding: 12px 24px; margin-bottom: 20px;
+}
+.hud-item { text-align: center; }
+.hud-label { font-size: 0.7rem; color: #6b7280; letter-spacing: 2px; text-transform: uppercase; }
+.hud-value { font-size: 1.8rem; font-weight: bold; color: #f59e0b; }
+#score-val { color: #34d399; }
+#timer-val { color: #60a5fa; }
+#pool-val { color: #a78bfa; }
+
+/* FACTORY ROW */
+#factory {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0; flex-wrap: nowrap; margin-bottom: 20px;
+}
+
+/* STATION */
+.station {
+  background: #1f2937; border: 2px solid #374151; border-radius: 12px;
+  padding: 16px 14px; text-align: center; min-width: 140px; position: relative;
+  transition: border-color 0.3s;
+}
+.station.active { border-color: #34d399; }
+.station.idle { border-color: #6b7280; }
+.station-icon { font-size: 2.2rem; margin-bottom: 4px; }
+.station-name { font-size: 0.7rem; color: #9ca3af; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+.station-rate { font-size: 0.75rem; color: #6b7280; margin-bottom: 10px; }
+.rate-val { color: #60a5fa; }
+.worker-ctrl { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.worker-btn {
+  background: #374151; border: 1px solid #4b5563; color: #e5e7eb;
+  width: 28px; height: 28px; border-radius: 6px; cursor: pointer;
+  font-size: 1.1rem; font-family: 'Courier New', monospace;
+  transition: all 0.15s; line-height: 1;
+}
+.worker-btn:hover:not(:disabled) { background: #4b5563; }
+.worker-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.worker-count { font-size: 1.4rem; font-weight: bold; color: #f59e0b; min-width: 24px; }
+.worker-label { font-size: 0.65rem; color: #6b7280; margin-top: 2px; }
+.throughput-badge {
+  position: absolute; top: -10px; right: 10px;
+  background: #374151; border: 1px solid #4b5563;
+  font-size: 0.65rem; padding: 2px 6px; border-radius: 10px; color: #9ca3af;
+}
+
+/* CONVEYOR */
+.conveyor {
+  width: 60px; height: 20px; background: #374151;
+  border-top: 2px solid #4b5563; border-bottom: 2px solid #4b5563;
+  position: relative; overflow: hidden; flex-shrink: 0;
+}
+.conveyor::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(
+    90deg, #374151 0px, #374151 12px, #4b5563 12px, #4b5563 16px
+  );
+  animation: belt 0.5s linear infinite;
+}
+@keyframes belt { from { background-position: 0 0; } to { background-position: 28px 0; } }
+.conveyor.slow::before { animation-duration: 1.2s; }
+.conveyor.fast::before { animation-duration: 0.25s; }
+
+/* BUFFER */
+.buffer-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px; min-width: 90px;
+}
+.buffer-label { font-size: 0.65rem; color: #6b7280; letter-spacing: 1px; margin-bottom: 6px; text-transform: uppercase; }
+.buffer-bar-bg {
+  width: 60px; height: 120px; background: #111827;
+  border: 2px solid #374151; border-radius: 6px;
+  position: relative; overflow: hidden;
+}
+.buffer-fill {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: #34d399; transition: height 0.15s, background 0.3s;
+  border-radius: 4px 4px 0 0;
+}
+.buffer-fill.warn { background: #f59e0b; }
+.buffer-fill.danger { background: #ef4444; animation: pulse 0.5s ease-in-out infinite alternate; }
+@keyframes pulse { from { opacity: 1; } to { opacity: 0.6; } }
+.buffer-count { font-size: 0.75rem; color: #9ca3af; margin-top: 6px; }
+.buffer-overflow-flash {
+  position: absolute; inset: 0; background: #ef444466;
+  animation: flashOut 0.5s forwards;
+  border-radius: 4px;
+}
+@keyframes flashOut { from { opacity: 1; } to { opacity: 0; } }
+
+/* OUTPUT */
+.output-box {
+  background: #1f2937; border: 2px solid #34d399; border-radius: 12px;
+  padding: 16px 14px; text-align: center; min-width: 100px;
+}
+.output-icon { font-size: 2rem; margin-bottom: 4px; }
+.output-label { font-size: 0.65rem; color: #6b7280; letter-spacing: 1px; text-transform: uppercase; }
+.output-count { font-size: 1.6rem; font-weight: bold; color: #34d399; }
+
+/* STATS BAR */
+#stats {
+  background: #1f2937; border: 1px solid #374151; border-radius: 10px;
+  padding: 14px 24px; display: flex; gap: 32px; justify-content: center; align-items: center;
+  flex-wrap: wrap;
+}
+.stat { text-align: center; }
+.stat-label { font-size: 0.65rem; color: #6b7280; letter-spacing: 1px; text-transform: uppercase; }
+.stat-value { font-size: 1.1rem; font-weight: bold; color: #e5e7eb; }
+#efficiency-bar-bg {
+  width: 200px; height: 12px; background: #374151; border-radius: 6px; overflow: hidden;
+}
+#efficiency-bar { height: 100%; background: #34d399; border-radius: 6px; transition: width 0.3s, background 0.3s; }
+
+/* END SCREEN */
+#end-screen {
+  display: none; position: fixed; inset: 0; background: #111827ee;
+  flex-direction: column; align-items: center; justify-content: center;
+  z-index: 200; gap: 20px;
+}
+#end-screen h2 { font-size: 2.5rem; color: #f59e0b; }
+.final-stats { background: #1f2937; border: 1px solid #374151; border-radius: 12px; padding: 28px 48px; text-align: center; }
+.final-stats .big { font-size: 3rem; color: #34d399; font-weight: bold; }
+.final-stats .row { display: flex; justify-content: space-between; gap: 32px; margin-top: 12px; color: #9ca3af; font-size: 0.9rem; }
+#play-again-btn {
+  background: #f59e0b; color: #111827; border: none; padding: 14px 40px;
+  font-size: 1rem; font-family: 'Courier New', monospace; font-weight: bold;
+  letter-spacing: 2px; cursor: pointer; border-radius: 8px; text-transform: uppercase;
+}
+#play-again-btn:hover { background: #fbbf24; }
+</style>
+</head>
+<body>
+
+<!-- START SCREEN -->
+<div id="start-screen">
+  <div style="font-size:3rem">🏭</div>
+  <h1>FACTORY LINE</h1>
+  <div class="subtitle">PRODUCTION BALANCER</div>
+  <div class="instructions">
+    <h2>HOW TO PLAY</h2>
+    <ul>
+      <li>Your factory has <span class="highlight">3 workstations</span> connected by buffers.</li>
+      <li>Each station processes items at a <span class="highlight">different base speed</span>.</li>
+      <li>You have <span class="highlight">12 workers</span> to assign across all stations.</li>
+      <li>Use <strong>[ + ]</strong> and <strong>[ - ]</strong> to move workers between stations.</li>
+      <li><span class="highlight">+10 pts</span> for every item that ships out the end of the line.</li>
+      <li><span class="warn">-5 pts</span> for every item lost to buffer overflow.</li>
+      <li>Keep buffers from filling up — <span class="warn">red = danger!</span></li>
+      <li>Find the optimal balance to maximize throughput. You have <span class="highlight">90 seconds</span>.</li>
+    </ul>
+    <div style="margin-top:14px; color:#6b7280; font-size:0.8rem;">
+      TIP: Downstream stations are slower — they need more workers!
+    </div>
+  </div>
+  <button id="start-btn">▶ START PRODUCTION</button>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="game-screen">
+  <!-- HUD -->
+  <div id="hud">
+    <div class="hud-item">
+      <div class="hud-label">Score</div>
+      <div class="hud-value" id="score-val">0</div>
+    </div>
+    <div class="hud-item">
+      <div class="hud-label">Time Left</div>
+      <div class="hud-value" id="timer-val">1:30</div>
+    </div>
+    <div class="hud-item">
+      <div class="hud-label">Workers in Pool</div>
+      <div class="hud-value" id="pool-val">9</div>
+    </div>
+  </div>
+
+  <!-- FACTORY LINE -->
+  <div id="factory">
+    <!-- STATION 1 -->
+    <div class="station" id="ws0">
+      <div class="throughput-badge" id="tp0">0/s</div>
+      <div class="station-icon">🔩</div>
+      <div class="station-name">Fabrication</div>
+      <div class="station-rate">Base: <span class="rate-val">3.0/worker</span></div>
+      <div class="worker-ctrl">
+        <button class="worker-btn" id="btn-minus-0">−</button>
+        <div class="worker-count" id="wc0">1</div>
+        <button class="worker-btn" id="btn-plus-0">+</button>
+      </div>
+      <div class="worker-label">workers</div>
+    </div>
+
+    <div class="conveyor" id="conv0"></div>
+
+    <!-- BUFFER 1 -->
+    <div class="buffer-wrap">
+      <div class="buffer-label">Buffer 1</div>
+      <div class="buffer-bar-bg" id="buf0-bg">
+        <div class="buffer-fill" id="buf0-fill" style="height:0%"></div>
+      </div>
+      <div class="buffer-count" id="buf0-count">0 / 25</div>
+    </div>
+
+    <div class="conveyor" id="conv1"></div>
+
+    <!-- STATION 2 -->
+    <div class="station" id="ws1">
+      <div class="throughput-badge" id="tp1">0/s</div>
+      <div class="station-icon">⚙️</div>
+      <div class="station-name">Assembly</div>
+      <div class="station-rate">Base: <span class="rate-val">2.0/worker</span></div>
+      <div class="worker-ctrl">
+        <button class="worker-btn" id="btn-minus-1">−</button>
+        <div class="worker-count" id="wc1">1</div>
+        <button class="worker-btn" id="btn-plus-1">+</button>
+      </div>
+      <div class="worker-label">workers</div>
+    </div>
+
+    <div class="conveyor" id="conv2"></div>
+
+    <!-- BUFFER 2 -->
+    <div class="buffer-wrap">
+      <div class="buffer-label">Buffer 2</div>
+      <div class="buffer-bar-bg" id="buf1-bg">
+        <div class="buffer-fill" id="buf1-fill" style="height:0%"></div>
+      </div>
+      <div class="buffer-count" id="buf1-count">0 / 25</div>
+    </div>
+
+    <div class="conveyor" id="conv3"></div>
+
+    <!-- STATION 3 -->
+    <div class="station" id="ws2">
+      <div class="throughput-badge" id="tp2">0/s</div>
+      <div class="station-icon">🔍</div>
+      <div class="station-name">Quality Check</div>
+      <div class="station-rate">Base: <span class="rate-val">1.0/worker</span></div>
+      <div class="worker-ctrl">
+        <button class="worker-btn" id="btn-minus-2">−</button>
+        <div class="worker-count" id="wc2">1</div>
+        <button class="worker-btn" id="btn-plus-2">+</button>
+      </div>
+      <div class="worker-label">workers</div>
+    </div>
+
+    <div class="conveyor fast" id="conv4"></div>
+
+    <!-- OUTPUT -->
+    <div class="output-box">
+      <div class="output-icon">📦</div>
+      <div class="output-label">Shipped</div>
+      <div class="output-count" id="shipped-val">0</div>
+    </div>
+  </div>
+
+  <!-- STATS BAR -->
+  <div id="stats">
+    <div class="stat">
+      <div class="stat-label">Items Shipped</div>
+      <div class="stat-value" id="stat-shipped">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Overflows</div>
+      <div class="stat-value" id="stat-overflow" style="color:#ef4444">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Line Rate</div>
+      <div class="stat-value" id="stat-rate">0.0/s</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Efficiency</div>
+      <div id="efficiency-bar-bg">
+        <div id="efficiency-bar" style="width:0%"></div>
+      </div>
+      <div class="stat-value" id="stat-eff" style="margin-top:4px">0%</div>
+    </div>
+  </div>
+</div>
+
+<!-- END SCREEN -->
+<div id="end-screen">
+  <div style="font-size:3rem">🏆</div>
+  <h2>PRODUCTION COMPLETE</h2>
+  <div class="final-stats">
+    <div style="color:#9ca3af; font-size:0.8rem; letter-spacing:2px; margin-bottom:8px;">FINAL SCORE</div>
+    <div class="big" id="final-score">0</div>
+    <div class="row">
+      <div>Items Shipped: <span id="final-shipped" style="color:#34d399"></span></div>
+      <div>Overflows: <span id="final-overflow" style="color:#ef4444"></span></div>
+    </div>
+    <div style="margin-top:10px; color:#9ca3af; font-size:0.8rem;" id="final-msg"></div>
+  </div>
+  <button id="play-again-btn">↺ PLAY AGAIN</button>
+</div>
+
+<script>
+const TOTAL_WORKERS = 12;
+const BUFFER_MAX = 25;
+const GAME_DURATION = 90;
+const TICK_MS = 100;
+const BASE_RATES = [3.0, 2.0, 1.0];
+
+let workers = [1, 1, 1];
+let pool = TOTAL_WORKERS - 3;
+let buffers = [0, 0];
+let score = 0;
+let shipped = 0;
+let overflows = 0;
+let timeLeft = GAME_DURATION;
+let gameRunning = false;
+let tickInterval = null;
+let timerInterval = null;
+let recentRate = 0;
+let rateAccum = 0;
+let rateSamples = 0;
+
+function rate(i) { return workers[i] * BASE_RATES[i]; }
+
+function gameTick() {
+  const dt = TICK_MS / 1000;
+
+  // WS1 → Buffer1
+  const produce1 = rate(0) * dt;
+  const space1 = BUFFER_MAX - buffers[0];
+  const overflow1 = Math.max(0, produce1 - space1);
+  buffers[0] = Math.min(BUFFER_MAX, buffers[0] + produce1);
+  if (overflow1 > 0) { score -= Math.ceil(overflow1) * 5; overflows += Math.ceil(overflow1); }
+
+  // WS2 ← Buffer1 → Buffer2
+  const maxProcess2 = rate(1) * dt;
+  const actual2 = Math.min(maxProcess2, buffers[0]);
+  buffers[0] -= actual2;
+  const space2 = BUFFER_MAX - buffers[1];
+  const overflow2 = Math.max(0, actual2 - space2);
+  buffers[1] = Math.min(BUFFER_MAX, buffers[1] + actual2);
+  if (overflow2 > 0) { score -= Math.ceil(overflow2) * 5; overflows += Math.ceil(overflow2); }
+
+  // WS3 ← Buffer2 → Ship
+  const maxProcess3 = rate(2) * dt;
+  const actual3 = Math.min(maxProcess3, buffers[1]);
+  buffers[1] -= actual3;
+  shipped += actual3;
+  score += actual3 * 10;
+  rateAccum += actual3;
+  rateSamples++;
+
+  if (rateSamples >= 10) {
+    recentRate = rateAccum / (rateSamples * dt);
+    rateAccum = 0; rateSamples = 0;
+  }
+
+  renderGame();
+}
+
+function renderGame() {
+  // HUD
+  document.getElementById('score-val').textContent = Math.max(0, Math.round(score));
+  document.getElementById('pool-val').textContent = pool;
+
+  // Buffers
+  for (let b = 0; b < 2; b++) {
+    const pct = (buffers[b] / BUFFER_MAX) * 100;
+    const fill = document.getElementById(`buf${b}-fill`);
+    fill.style.height = pct + '%';
+    fill.className = 'buffer-fill' + (pct >= 90 ? ' danger' : pct >= 60 ? ' warn' : '');
+    document.getElementById(`buf${b}-count`).textContent = `${Math.floor(buffers[b])} / ${BUFFER_MAX}`;
+
+    // Overflow flash
+    if (pct >= 100) {
+      const bg = document.getElementById(`buf${b}-bg`);
+      const flash = document.createElement('div');
+      flash.className = 'buffer-overflow-flash';
+      bg.appendChild(flash);
+      setTimeout(() => flash.remove(), 500);
+    }
+  }
+
+  // Worker counts & throughput badges
+  for (let i = 0; i < 3; i++) {
+    document.getElementById(`wc${i}`).textContent = workers[i];
+    document.getElementById(`tp${i}`).textContent = rate(i).toFixed(1) + '/s';
+    document.getElementById(`btn-minus-${i}`).disabled = workers[i] <= 0;
+    document.getElementById(`btn-plus-${i}`).disabled = pool <= 0;
+    document.getElementById(`ws${i}`).className = 'station ' + (workers[i] > 0 ? 'active' : 'idle');
+  }
+
+  // Shipped
+  document.getElementById('shipped-val').textContent = Math.floor(shipped);
+  document.getElementById('stat-shipped').textContent = Math.floor(shipped);
+  document.getElementById('stat-overflow').textContent = overflows;
+  document.getElementById('stat-rate').textContent = recentRate.toFixed(1) + '/s';
+
+  // Efficiency: max possible rate with 12 workers optimally is ~5.5/s
+  const maxRate = 5.54;
+  const eff = Math.min(100, (recentRate / maxRate) * 100);
+  document.getElementById('efficiency-bar').style.width = eff + '%';
+  document.getElementById('efficiency-bar').style.background = eff > 70 ? '#34d399' : eff > 40 ? '#f59e0b' : '#ef4444';
+  document.getElementById('stat-eff').textContent = Math.round(eff) + '%';
+}
+
+function updateTimer() {
+  timeLeft--;
+  const m = Math.floor(timeLeft / 60);
+  const s = timeLeft % 60;
+  document.getElementById('timer-val').textContent = `${m}:${s.toString().padStart(2,'0')}`;
+  if (timeLeft <= 0) endGame();
+}
+
+function endGame() {
+  gameRunning = false;
+  clearInterval(tickInterval);
+  clearInterval(timerInterval);
+
+  const finalScore = Math.max(0, Math.round(score));
+  document.getElementById('final-score').textContent = finalScore;
+  document.getElementById('final-shipped').textContent = Math.floor(shipped);
+  document.getElementById('final-overflow').textContent = overflows;
+
+  let msg = '';
+  if (finalScore > 4000) msg = 'Outstanding! You are a master production engineer!';
+  else if (finalScore > 2500) msg = 'Great job! Your line was running efficiently.';
+  else if (finalScore > 1000) msg = 'Good effort! Try balancing workers more evenly.';
+  else msg = 'Keep practicing! Tip: put more workers at Quality Check.';
+  document.getElementById('final-msg').textContent = msg;
+
+  document.getElementById('end-screen').style.display = 'flex';
+}
+
+function startGame() {
+  workers = [1, 1, 1];
+  pool = TOTAL_WORKERS - 3;
+  buffers = [0, 0];
+  score = 0; shipped = 0; overflows = 0;
+  timeLeft = GAME_DURATION;
+  recentRate = 0; rateAccum = 0; rateSamples = 0;
+  gameRunning = true;
+
+  document.getElementById('start-screen').style.display = 'none';
+  document.getElementById('end-screen').style.display = 'none';
+  document.getElementById('game-screen').style.display = 'block';
+  document.getElementById('timer-val').textContent = '1:30';
+
+  renderGame();
+  tickInterval = setInterval(gameTick, TICK_MS);
+  timerInterval = setInterval(updateTimer, 1000);
+}
+
+// Worker buttons
+for (let i = 0; i < 3; i++) {
+  document.getElementById(`btn-plus-${i}`).addEventListener('click', () => {
+    if (pool > 0) { workers[i]++; pool--; renderGame(); }
+  });
+  document.getElementById(`btn-minus-${i}`).addEventListener('click', () => {
+    if (workers[i] > 0) { workers[i]--; pool++; renderGame(); }
+  });
+}
+
+document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('play-again-btn').addEventListener('click', startGame);
+</script>
+</body>
+</html>
