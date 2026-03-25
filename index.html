@@ -64,7 +64,7 @@
     <span>TIME <span class="val" id="timer">45</span></span>
   </div>
   <canvas id="c" width="800" height="560"></canvas>
-  <div id="controls">MOVE: ← → &nbsp;|&nbsp; SHOOT: SPACE &nbsp;|&nbsp; PAUSE: P</div>
+  <div id="controls">MOVE: &#8592; &#8594; &nbsp;|&nbsp; SHOOT: SPACE &nbsp;|&nbsp; PAUSE: P</div>
 
   <div id="overlay">
     <h1>ALIEN SHOOTER</h1>
@@ -74,25 +74,22 @@
   </div>
 
 <script>
-// ─── Config ───────────────────────────────────────────────────────────────────
 const W = 800, H = 560;
 const PLAYER_W = 48, PLAYER_H = 28;
 const BULLET_W = 4, BULLET_H = 14;
 const ALIEN_W = 36, ALIEN_H = 28;
 
 const LEVELS = [
-  // rows, cols, alienSpeed, dropAmount, shootInterval, timeLimit
   { rows: 3, cols: 9, speed: 28,  drop: 16, shootEvery: 2200, time: 45, label: "WAVE 1 — SCOUTS" },
   { rows: 4, cols: 10, speed: 38, drop: 18, shootEvery: 1600, time: 42, label: "WAVE 2 — WARRIORS" },
   { rows: 4, cols: 11, speed: 52, drop: 20, shootEvery: 1100, time: 40, label: "WAVE 3 — OVERLORDS" },
 ];
 
-// ─── State ────────────────────────────────────────────────────────────────────
 const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
 const overlay = document.getElementById('overlay');
 
-let state = 'title'; // title | levelStart | playing | paused | levelClear | gameOver | win
+let state = 'title';
 let level = 0, score = 0, lives = 3;
 let player, bullets, alienBullets, aliens;
 let alienDir = 1, alienMoveTimer = 0, alienShootTimer = 0;
@@ -100,14 +97,11 @@ let timeLeft, levelTimer;
 let keys = {}, lastTime = 0;
 let stars = [];
 let explosions = [];
-let flashMsg = null, flashTimer = 0;
 
-// ─── Stars ────────────────────────────────────────────────────────────────────
 for (let i = 0; i < 120; i++) {
   stars.push({ x: Math.random()*W, y: Math.random()*H, r: Math.random()*1.5+0.3, speed: Math.random()*0.4+0.1 });
 }
 
-// ─── Init level ───────────────────────────────────────────────────────────────
 function initLevel() {
   const cfg = LEVELS[level];
   player = { x: W/2 - PLAYER_W/2, y: H - PLAYER_H - 12, speed: 320, cooldown: 0 };
@@ -150,7 +144,6 @@ function triggerTimeUp() {
   setOverlay('<h1>TIME\'S UP!</h1><h2>GAME OVER</h2><p>Score: ' + score + '</p><div class="blink">PRESS SPACE TO RETRY</div>');
 }
 
-// ─── Alien grid bounds ────────────────────────────────────────────────────────
 function alienBounds() {
   const live = aliens.filter(a => !a.dead);
   if (!live.length) return null;
@@ -161,7 +154,6 @@ function alienBounds() {
   };
 }
 
-// ─── Explosion ────────────────────────────────────────────────────────────────
 function spawnExplosion(x, y, color) {
   const parts = [];
   for (let i = 0; i < 10; i++) {
@@ -172,7 +164,6 @@ function spawnExplosion(x, y, color) {
   explosions.push({ parts, color: color || '#0ff', life: 1 });
 }
 
-// ─── Overlay helper ───────────────────────────────────────────────────────────
 function setOverlay(html) {
   overlay.innerHTML = html;
   overlay.style.display = 'flex';
@@ -181,7 +172,6 @@ function hideOverlay() {
   overlay.style.display = 'none';
 }
 
-// ─── Input ────────────────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
   keys[e.code] = true;
   if (e.code === 'Space') e.preventDefault();
@@ -220,21 +210,16 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('keyup', e => { keys[e.code] = false; });
 
-// ─── Game loop ────────────────────────────────────────────────────────────────
 function loop(ts) {
   const dt = Math.min((ts - lastTime) / 1000, 0.05);
   lastTime = ts;
-
   updateStars(dt);
   if (state === 'playing') update(dt);
   draw();
-
-  // HUD
   document.getElementById('lvl').textContent   = level + 1;
   document.getElementById('score').textContent = score;
-  document.getElementById('lives').textContent = '♥'.repeat(lives);
+  document.getElementById('lives').textContent = '\u2665'.repeat(lives);
   document.getElementById('timer').textContent = Math.max(0, timeLeft);
-
   requestAnimationFrame(loop);
 }
 
@@ -245,36 +230,30 @@ function updateStars(dt) {
   }
 }
 
-// ─── Update ───────────────────────────────────────────────────────────────────
 function update(dt) {
   const cfg = LEVELS[level];
 
-  // Player movement
   if ((keys['ArrowLeft'] || keys['KeyA']) && player.x > 0)
     player.x -= player.speed * dt;
   if ((keys['ArrowRight'] || keys['KeyD']) && player.x + PLAYER_W < W)
     player.x += player.speed * dt;
   player.x = Math.max(0, Math.min(W - PLAYER_W, player.x));
 
-  // Shooting
   player.cooldown -= dt;
   if (keys['Space'] && player.cooldown <= 0) {
     bullets.push({ x: player.x + PLAYER_W/2 - BULLET_W/2, y: player.y, speed: 520 });
     player.cooldown = 0.25;
   }
 
-  // Move player bullets
   for (const b of bullets) b.y -= b.speed * dt;
   bullets = bullets.filter(b => b.y > -BULLET_H);
 
-  // Move alien bullets
   for (const b of alienBullets) b.y += b.speed * dt;
   alienBullets = alienBullets.filter(b => b.y < H + 10);
 
-  // Alien movement
   alienMoveTimer += dt;
   const liveCount = aliens.filter(a => !a.dead).length;
-  const speedMult = 1 + (1 - liveCount / aliens.length) * 1.4; // speed up as fewer aliens
+  const speedMult = 1 + (1 - liveCount / aliens.length) * 1.4;
   const moveInterval = 1 / (cfg.speed * speedMult / 60);
 
   if (alienMoveTimer >= moveInterval) {
@@ -293,14 +272,12 @@ function update(dt) {
       }
     }
 
-    // Check if aliens reached player
     if (bounds.maxY >= player.y - 10) {
       loseLife();
       return;
     }
   }
 
-  // Alien animation timers
   for (const a of aliens) {
     if (!a.dead) {
       a.animTimer += dt;
@@ -309,13 +286,11 @@ function update(dt) {
     if (a.hit) { a.hitTimer -= dt; if (a.hitTimer <= 0) a.hit = false; }
   }
 
-  // Alien shooting
   alienShootTimer += dt * 1000;
   if (alienShootTimer >= cfg.shootEvery) {
     alienShootTimer = 0;
     const shooters = aliens.filter(a => !a.dead);
     if (shooters.length) {
-      // pick bottom-most alien in random column
       const cols = [...new Set(shooters.map(a => a.col))];
       const col  = cols[Math.floor(Math.random() * cols.length)];
       const inCol = shooters.filter(a => a.col === col);
@@ -324,7 +299,6 @@ function update(dt) {
     }
   }
 
-  // Bullet–alien collisions
   for (const b of bullets) {
     for (const a of aliens) {
       if (!a.dead && !b.dead &&
@@ -339,7 +313,6 @@ function update(dt) {
   }
   bullets = bullets.filter(b => !b.dead);
 
-  // Alien bullet–player collision
   for (const b of alienBullets) {
     if (!b.dead &&
         b.x < player.x + PLAYER_W && b.x + 6 > player.x &&
@@ -352,7 +325,6 @@ function update(dt) {
   }
   alienBullets = alienBullets.filter(b => !b.dead);
 
-  // Update explosions
   for (const ex of explosions) {
     ex.life -= dt * 2;
     for (const p of ex.parts) {
@@ -363,10 +335,9 @@ function update(dt) {
   }
   explosions = explosions.filter(e => e.life > 0);
 
-  // Check win condition
   if (aliens.every(a => a.dead)) {
     clearInterval(levelTimer);
-    score += Math.max(0, timeLeft) * 5; // time bonus
+    score += Math.max(0, timeLeft) * 5;
     if (level >= LEVELS.length - 1) {
       state = 'win';
       setOverlay('<h1>YOU WIN!</h1><h2>EARTH IS SAVED!</h2><p>Final Score: ' + score + '</p><div class="blink">PRESS SPACE TO PLAY AGAIN</div>');
@@ -389,12 +360,10 @@ function loseLife() {
   }
 }
 
-// ─── Draw ─────────────────────────────────────────────────────────────────────
 function draw() {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, W, H);
 
-  // Stars
   for (const s of stars) {
     const alpha = 0.3 + s.speed * 1.5;
     ctx.fillStyle = `rgba(150,200,255,${alpha})`;
@@ -403,15 +372,12 @@ function draw() {
 
   if (state === 'title' || state === 'win' || state === 'gameOver') return;
 
-  // Ground line
   ctx.strokeStyle = '#0ff3';
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, H - 2); ctx.lineTo(W, H - 2); ctx.stroke();
 
-  // Player ship
   drawPlayer();
 
-  // Bullets
   ctx.shadowBlur = 10;
   ctx.shadowColor = '#ff0';
   ctx.fillStyle = '#ff0';
@@ -419,7 +385,6 @@ function draw() {
     ctx.fillRect(b.x, b.y, BULLET_W, BULLET_H);
   }
 
-  // Alien bullets
   ctx.shadowColor = '#f44';
   ctx.fillStyle = '#f44';
   for (const b of alienBullets) {
@@ -429,12 +394,10 @@ function draw() {
   }
   ctx.shadowBlur = 0;
 
-  // Aliens
   for (const a of aliens) {
     if (!a.dead) drawAlien(a);
   }
 
-  // Explosions
   for (const ex of explosions) {
     for (const p of ex.parts) {
       if (p.life > 0) {
@@ -446,7 +409,6 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
-  // Level label
   if (state === 'playing') {
     ctx.fillStyle = '#0ff2';
     ctx.font = '13px Courier New';
@@ -458,12 +420,8 @@ function draw() {
 function drawPlayer() {
   const x = player.x, y = player.y;
   ctx.shadowBlur = 12; ctx.shadowColor = '#0f8';
-
-  // Engine glow
   ctx.fillStyle = '#0f83';
   ctx.fillRect(x + PLAYER_W/2 - 4, y + PLAYER_H, 8, 6);
-
-  // Body
   ctx.fillStyle = '#0cf';
   ctx.beginPath();
   ctx.moveTo(x + PLAYER_W/2, y);
@@ -471,8 +429,6 @@ function drawPlayer() {
   ctx.lineTo(x + 4, y + PLAYER_H);
   ctx.closePath();
   ctx.fill();
-
-  // Wings
   ctx.fillStyle = '#07a';
   ctx.beginPath();
   ctx.moveTo(x + PLAYER_W/2 - 8, y + PLAYER_H - 10);
@@ -486,26 +442,16 @@ function drawPlayer() {
   ctx.lineTo(x + PLAYER_W/2 + 2, y + PLAYER_H - 2);
   ctx.closePath();
   ctx.fill();
-
-  // Cockpit
   ctx.fillStyle = '#fff';
   ctx.beginPath(); ctx.ellipse(x + PLAYER_W/2, y + PLAYER_H*0.55, 4, 5, 0, 0, Math.PI*2); ctx.fill();
-
   ctx.shadowBlur = 0;
 }
 
 function drawAlien(a) {
   const x = Math.round(a.x), y = Math.round(a.y);
   const f = a.animFrame;
-
-  // Pick color by row/level
-  const colors = [
-    ['#0ff', '#09c'],
-    ['#ff0', '#aa0'],
-    ['#f0f', '#90c'],
-  ];
+  const colors = [['#0ff','#09c'],['#ff0','#aa0'],['#f0f','#90c']];
   const [bright, dark] = colors[Math.min(a.row, 2)];
-
   if (a.hit) {
     ctx.shadowBlur = 20; ctx.shadowColor = '#fff';
     ctx.fillStyle = '#fff';
@@ -513,40 +459,27 @@ function drawAlien(a) {
     ctx.shadowBlur = 6; ctx.shadowColor = bright;
     ctx.fillStyle = bright;
   }
-
-  // Body
   ctx.beginPath();
   ctx.ellipse(x + ALIEN_W/2, y + ALIEN_H/2, ALIEN_W/2 - 2, ALIEN_H/2 - 4, 0, 0, Math.PI*2);
   ctx.fill();
-
-  // Eyes
   ctx.fillStyle = '#000';
   ctx.beginPath(); ctx.ellipse(x + 10, y + 12, 4, 5, 0, 0, Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.ellipse(x + 26, y + 12, 4, 5, 0, 0, Math.PI*2); ctx.fill();
-
-  // Pupils
   ctx.fillStyle = '#f00';
   ctx.beginPath(); ctx.arc(x + 10 + (f?1:-1), y + 13, 2, 0, Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.arc(x + 26 + (f?1:-1), y + 13, 2, 0, Math.PI*2); ctx.fill();
-
-  // Legs / antennae
   ctx.strokeStyle = dark;
   ctx.lineWidth = 2;
-  // Left antennae
   ctx.beginPath(); ctx.moveTo(x + 8, y + 4); ctx.lineTo(x + 4, y - 4 + (f?2:0)); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(x + 14, y + 2); ctx.lineTo(x + 12, y - 6 + (f?0:2)); ctx.stroke();
-  // Right antennae
   ctx.beginPath(); ctx.moveTo(x + 28, y + 4); ctx.lineTo(x + 32, y - 4 + (f?2:0)); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(x + 22, y + 2); ctx.lineTo(x + 24, y - 6 + (f?0:2)); ctx.stroke();
-  // Bottom legs
   ctx.beginPath(); ctx.moveTo(x + 8,  y + ALIEN_H - 2); ctx.lineTo(x + 4,  y + ALIEN_H + (f?5:3)); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(x + 18, y + ALIEN_H - 2); ctx.lineTo(x + 18, y + ALIEN_H + (f?3:5)); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(x + 28, y + ALIEN_H - 2); ctx.lineTo(x + 32, y + ALIEN_H + (f?5:3)); ctx.stroke();
-
   ctx.shadowBlur = 0;
 }
 
-// ─── Start ────────────────────────────────────────────────────────────────────
 setOverlay('<h1>ALIEN SHOOTER</h1><p>Destroy all aliens before time runs out!<br>3 waves stand between you and victory.</p><div class="blink">PRESS SPACE TO START</div>');
 requestAnimationFrame(loop);
 </script>
